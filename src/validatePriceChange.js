@@ -2,9 +2,9 @@ import puppeteer from 'puppeteer'
 import { supabase } from './config/supabase.js'
 import { Telegraf } from 'telegraf'
 
-const BOT = new Telegraf('')
+const BOT = new Telegraf(process.env.BOT_ID)
 
-const CHAT_IDS = ['', '']
+const CHAT_IDS = process.env.CHAT_IDS.split(', ')
 
 async function sendNotifications (list) {
   const batchSize = 5 // Tamaño del grupo de productos a enviar por mensaje
