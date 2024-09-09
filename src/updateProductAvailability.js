@@ -1,49 +1,8 @@
 import puppeteer from 'puppeteer'
-import { supabase } from './config/supabase.js'
+import { getAllProducts, updateProductStock } from './config/sequelize/methods.js'
+import { sequelize } from './config/sequelize/index.js'
 
-async function updateProductAvailabilities () {
-  const { data: incProducts } = await supabase
-    .from('inc_products')
-    .select('*')
-
-  const listProd = []
-  let counter = 1
-
-  for (const prod of incProducts) {
-    if (prod.link) {
-      console.log(`${counter}/${incProducts.length} - Updating stock of: ${prod.name}`)
-      try {
-        const { qty } = await startDownload(prod.link)
-        listProd.push({
-          ...prod,
-          available: qty > 0,
-          stock: qty
-        })
-      } catch (error) {
-        listProd.push({
-          ...prod,
-          available: false,
-          stock: -1
-        })
-      }
-    }
-    counter++
-  }
-
-  console.log('upsert')
-  const { error } = await supabase
-    .from('inc_products')
-    .upsert(listProd)
-    .select()
-
-  if (error) {
-    console.log(error)
-  } else {
-    // console.log(data.length())
-  }
-}
-
-async function startDownload (url) {
+async function startUpdating (url) {
   const browser = await puppeteer.launch({
     headless: true, // Cambia a true para modo sin cabeza
     slowMo: 50
@@ -73,4 +32,39 @@ async function startDownload (url) {
   return result
 }
 
-updateProductAvailabilities()
+// updateProductAvailabilities()
+
+async function main () {
+  try {
+    await sequelize.authenticate()
+    console.log('Conexión a la base de datos establecida')
+
+    // Obtener todos los productos
+    const allProducts = await getAllProducts()
+    // console.log(allProducts)
+
+    const length = allProducts.length
+
+    for (let index = 0; index < length; index++) {
+      const element = allProducts[index]
+
+      if (element.link.includes('mercadolibre')) {
+        const { qty } = await startUpdating(element.link)
+
+        const updated = await updateProductStock(element.id, qty)
+
+        if (updated) {
+          console.log(`${element.id} -  Stock actualizado (${qty}) - ${element.link}`)
+        } else {
+          console.log(`${element.id} -  Error al actualizar el stock`)
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error:', error)
+  } finally {
+    await sequelize.close()
+  }
+}
+
+main()
