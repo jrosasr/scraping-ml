@@ -1,10 +1,10 @@
 import puppeteer from 'puppeteer'
-import { supabase } from './config/supabase.js'
+import client from './config/postgres.js'
 import { Telegraf } from 'telegraf'
 
 const BOT = new Telegraf(process.env.BOT_ID)
 
-const CHAT_IDS = process.env.CHAT_IDS.split(', ')
+const CHAT_IDS = process.env.CHAT_IDS ? process.env.CHAT_IDS.split(', ') : []
 
 async function sendNotifications (list) {
   const batchSize = 5 // Tamaño del grupo de productos a enviar por mensaje
@@ -56,25 +56,29 @@ async function sendNotifications (list) {
 }
 
 async function validatePriceChange () {
-  const { data: incProducts } = await supabase
-    .from('inc_products')
-    .select('*')
-    .eq('available', true)
-    .eq('hidden', false)
+  console.log('Validando cambios de precios...')
+
+  // get products from postgres client
+  const { rows: incProducts } = await client.query('SELECT * FROM products WHERE available = true')
+
+  console.log(`Found ${incProducts.length} products to check.`)
 
   const list = []
+  const listProductsToUpdate = []
   let counter = 1
 
   for (const prod of incProducts) {
-    if (prod.link) {
+    if (prod.link && prod.link.includes('https://articulo.mercadolibre.com')) {
       try {
-        const { priceContent } = await startDownload(prod.link)
+        const { priceContent } = await startScraping(prod.link)
         console.log(`${counter}/${incProducts.length} - Updating stock of: ${prod.name}`)
-        // console.log('---' + prod.link)
-        console.log('---' + prod.cost)
-        console.log('--' + priceContent)
-        console.log('----------------------')
         if (priceContent > (prod.cost + 0.1) || priceContent < (prod.cost - 0.1)) {
+          console.log('----------------------')
+          console.log('---' + prod.cost)
+          console.log('--' + priceContent)
+          console.log('----------------------')
+          listProductsToUpdate.push(prod.id)
+
           list.push({
             name: prod.name,
             link: prod.link,
@@ -84,18 +88,23 @@ async function validatePriceChange () {
           })
         }
       } catch (error) {
-        //
+        console.error(error)
       }
     }
     counter++
   }
 
-  await sendNotifications(list)
+  // Actualiza el valor de la columna outdated_price a falso de todos lo productos que estan en la lista listProductsToUpdate
+  await client.query('UPDATE products SET outdated_price = false WHERE id = ANY($1)', [listProductsToUpdate])
+
+  console.log(`Productos actualizados: ${listProductsToUpdate.length}`)
+
+  // await sendNotifications(list)
 }
 
-async function startDownload (url) {
+async function startScraping (url) {
   const browser = await puppeteer.launch({
-    headless: true, // Cambia a true para modo sin cabeza
+    headless: false, // Cambia a true para modo sin cabeza
     slowMo: 50
   })
 
