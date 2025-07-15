@@ -1,16 +1,13 @@
 import puppeteer from 'puppeteer'
 import client from './config/postgres.js'
-import { Telegraf } from 'telegraf'
 import fetch from 'node-fetch'
 import 'dotenv/config'
-
-const CHAT_IDS = process.env.CHAT_IDS ? process.env.CHAT_IDS.split(', ') : []
 
 async function validatePriceChange () {
   console.log('Validando cambios de precios...')
 
   // get products from postgres client
-  const { rows: incProducts } = await client.query('SELECT * FROM products WHERE available = true LIMIT 2')
+  const { rows: incProducts } = await client.query('SELECT * FROM products WHERE available = true')
 
   console.log(`Found ${incProducts.length} products to check.`)
 
@@ -94,8 +91,8 @@ async function startScraping (url) {
 async function sendWhatsappReminder (pendingCount) {
   const url = 'http://localhost:3008/v1/messages'
   const body = {
-    number: '+584247060700',
-    message: `RosasStore te recuerda que hay ${pendingCount} productos pendientes por actualizar su precio`,
+    number: '+584147389097',
+    message: `*RosasStore* te recuerda que hay ${pendingCount} productos pendientes por actualizar en la plataforma.`,
     secret: 'secret'
   }
   try {
