@@ -22,7 +22,7 @@ async function validatePriceChange () {
         if (priceContent > (prod.cost + 0.1) || priceContent < (prod.cost - 0.1)) {
           listProductsToUpdate.push(prod.id)
           console.log(prod.cost)
-          console.log(prod.priceContent)
+          console.log(priceContent)
         }
       } catch (error) {
         console.error(error)
