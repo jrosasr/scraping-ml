@@ -1,69 +1,19 @@
 import puppeteer from 'puppeteer'
 import client from './config/postgres.js'
 import { Telegraf } from 'telegraf'
-
-const BOT = new Telegraf(process.env.BOT_ID)
+import fetch from 'node-fetch'
+import 'dotenv/config'
 
 const CHAT_IDS = process.env.CHAT_IDS ? process.env.CHAT_IDS.split(', ') : []
-
-async function sendNotifications (list) {
-  const batchSize = 5 // Tamaño del grupo de productos a enviar por mensaje
-  const chunks = []
-
-  // Dividir la lista en grupos de batchSize
-  for (let i = 0; i < list.length; i += batchSize) {
-    chunks.push(list.slice(i, i + batchSize))
-  }
-
-  // Enviar el mensaje a cada chatId
-  const currentDate = new Date().toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
-  }).replace(/\//g, '/')
-
-  const html = `<b>Lista de productos que actualizaron su precio (${currentDate}):</b>\n\n`
-
-  for (const chatId of CHAT_IDS) {
-    try {
-      await BOT.telegram.sendMessage(chatId, html, { parse_mode: 'HTML' })
-      console.log(`Mensaje enviado a ${chatId}`)
-    } catch (error) {
-      console.error(`Error al enviar mensaje a ${chatId}:`, error)
-    }
-  }
-
-  // Iterar sobre cada grupo y enviar los mensajes
-  for (const chunk of chunks) {
-    let htmlContent = ''
-
-    for (const item of chunk) {
-      htmlContent += `${item.icon} <a href="${item.link}">${item.name}</a>\n`
-      htmlContent += `<strong>Antes: ${item.cost}</strong>\n`
-      htmlContent += `<strong>Ahora: ${item.newCost}</strong>\n\n`
-    }
-
-    // Enviar el mensaje a cada chatId
-    for (const chatId of CHAT_IDS) {
-      try {
-        await BOT.telegram.sendMessage(chatId, htmlContent, { parse_mode: 'HTML' })
-        console.log(`Mensaje enviado a ${chatId}`)
-      } catch (error) {
-        console.error(`Error al enviar mensaje a ${chatId}:`, error)
-      }
-    }
-  }
-}
 
 async function validatePriceChange () {
   console.log('Validando cambios de precios...')
 
   // get products from postgres client
-  const { rows: incProducts } = await client.query('SELECT * FROM products WHERE available = true')
+  const { rows: incProducts } = await client.query('SELECT * FROM products WHERE available = true LIMIT 2')
 
   console.log(`Found ${incProducts.length} products to check.`)
 
-  const list = []
   const listProductsToUpdate = []
   let counter = 1
 
@@ -73,19 +23,7 @@ async function validatePriceChange () {
         const { priceContent } = await startScraping(prod.link)
         console.log(`${counter}/${incProducts.length} - Updating stock of: ${prod.name}`)
         if (priceContent > (prod.cost + 0.1) || priceContent < (prod.cost - 0.1)) {
-          console.log('----------------------')
-          console.log('---' + prod.cost)
-          console.log('--' + priceContent)
-          console.log('----------------------')
           listProductsToUpdate.push(prod.id)
-
-          list.push({
-            name: prod.name,
-            link: prod.link,
-            cost: prod.cost,
-            newCost: priceContent,
-            icon: priceContent > prod.cost ? '📈' : '📉'
-          })
         }
       } catch (error) {
         console.error(error)
@@ -99,16 +37,31 @@ async function validatePriceChange () {
 
   console.log(`Productos actualizados: ${listProductsToUpdate.length}`)
 
-  // await sendNotifications(list)
+  sendWhatsappReminder(listProductsToUpdate.length)
 }
 
 async function startScraping (url) {
   const browser = await puppeteer.launch({
-    headless: false, // Cambia a true para modo sin cabeza
-    slowMo: 50
+    headless: true, // Cambia a true para modo sin cabeza
+    slowMo: 50,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-infobars',
+      '--window-size=1920,1080',
+      '--lang=es-ES,es'
+    ]
   })
 
   const page = await browser.newPage()
+  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+  await page.setExtraHTTPHeaders({
+    'Accept-Language': 'es-ES,es;q=0.9'
+  })
+  await page.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
+  })
   await page.goto(url)
 
   const isQtyAvailable = await page.evaluate(() => {
@@ -136,6 +89,29 @@ async function startScraping (url) {
   await browser.close()
 
   return result
+}
+
+async function sendWhatsappReminder (pendingCount) {
+  const url = 'http://localhost:3008/v1/messages'
+  const body = {
+    number: '+584247060700',
+    message: `RosasStore te recuerda que hay ${pendingCount} productos pendientes por actualizar su precio`,
+    secret: 'secret'
+  }
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    if (!response.ok) {
+      console.error('Error enviando mensaje WhatsApp:', await response.text())
+    } else {
+      console.log('Mensaje de WhatsApp enviado correctamente')
+    }
+  } catch (err) {
+    console.error('Error en la petición WhatsApp:', err)
+  }
 }
 
 validatePriceChange()
