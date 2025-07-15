@@ -7,7 +7,7 @@ async function validatePriceChange () {
   console.log('Validando cambios de precios...')
 
   // get products from postgres client
-  const { rows: incProducts } = await client.query('SELECT * FROM products WHERE available = true LIMIT 5')
+  const { rows: incProducts } = await client.query('SELECT * FROM products WHERE available = true')
 
   console.log(`Found ${incProducts.length} products to check.`)
 
