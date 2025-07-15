@@ -7,7 +7,7 @@ async function validatePriceChange () {
   console.log('Validando cambios de precios...')
 
   // get products from postgres client
-  const { rows: incProducts } = await client.query('SELECT * FROM products WHERE available = true')
+  const { rows: incProducts } = await client.query('SELECT * FROM products WHERE available = true LIMIT 5')
 
   console.log(`Found ${incProducts.length} products to check.`)
 
@@ -32,7 +32,7 @@ async function validatePriceChange () {
   // Actualiza el valor de la columna outdated_price a falso de todos lo productos que estan en la lista listProductsToUpdate
   await client.query('UPDATE products SET outdated_price = false WHERE id = ANY($1)', [listProductsToUpdate])
 
-  console.log(`Productos actualizados: ${listProductsToUpdate.length}`)
+  console.log(`Productos pendientes por actualizar: ${listProductsToUpdate.length}`)
 
   sendWhatsappReminder(listProductsToUpdate.length)
 }
@@ -89,11 +89,11 @@ async function startScraping (url) {
 }
 
 async function sendWhatsappReminder (pendingCount) {
-  const url = 'http://localhost:3008/v1/messages'
+  const url = `${process.env.BOT_WHATSAPP}/${process.env.BOT_WHATSAPP_VERSION}/messages`
   const body = {
-    number: '+584147389097',
+    number: '+584247060700',
     message: `*RosasStore* te recuerda que hay ${pendingCount} productos pendientes por actualizar en la plataforma.`,
-    secret: 'secret'
+    secret: process.env.BOT_WHATSAPP_TOKEN
   }
   try {
     const response = await fetch(url, {
