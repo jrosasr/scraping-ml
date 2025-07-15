@@ -15,7 +15,7 @@ async function validatePriceChange () {
   let counter = 1
 
   for (const prod of incProducts) {
-    if (prod.link && prod.link.includes('https://articulo.mercadolibre.com')) {
+    if (prod.link && prod.link.includes('mercadolibre')) {
       try {
         const { priceContent } = await startScraping(prod.link)
         console.log(`${counter}/${incProducts.length} - Updating stock of: ${prod.name}`)
