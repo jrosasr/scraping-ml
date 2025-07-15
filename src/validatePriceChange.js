@@ -21,6 +21,8 @@ async function validatePriceChange () {
         console.log(`${counter}/${incProducts.length} - Updating stock of: ${prod.name}`)
         if (priceContent > (prod.cost + 0.1) || priceContent < (prod.cost - 0.1)) {
           listProductsToUpdate.push(prod.id)
+          console.log(prod.cost)
+          console.log(prod.priceContent)
         }
       } catch (error) {
         console.error(error)
@@ -91,7 +93,7 @@ async function startScraping (url) {
 async function sendWhatsappReminder (pendingCount) {
   const url = `${process.env.BOT_WHATSAPP}/${process.env.BOT_WHATSAPP_VERSION}/messages`
   const body = {
-    number: '+584247060700',
+    number: '+584147389097',
     message: `*RosasStore* te recuerda que hay ${pendingCount} productos pendientes por actualizar en la plataforma.`,
     secret: process.env.BOT_WHATSAPP_TOKEN
   }
